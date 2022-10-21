@@ -3,8 +3,9 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import re
+import asyncio
 
-def checkLink(response, spamLinkDomains):
+async def checkLink(response, spamLinkDomains):
     domainList = []
     soup = BeautifulSoup(response.text, 'html.parser')
     links = soup.find_all('a')
@@ -13,6 +14,7 @@ def checkLink(response, spamLinkDomains):
         domain = urlparse(link.get('href')).netloc
         if domain:
             domainList.append(domain)
+
     for spamLink in spamLinkDomains:
         if spamLink in domainList:
             print(spamLink, 'Spam link detected')
@@ -23,9 +25,10 @@ def isSpam(content, spamLinkDomains, redirectionDepth):
 
     response = requests.get(url)
     if urlparse(url).netloc in spamLinkDomains:
-        print('YESS')
+        print('Detected')
         return True
 
+    # getting an array of urls (redirected and the final destination)
     redirectUrls = []
     for url in response.history[1:]:
         redirectUrls.append(url.url)
@@ -36,28 +39,35 @@ def isSpam(content, spamLinkDomains, redirectionDepth):
     if response.history:
         print("Request was redirected")
 
-        # if redirectionDepth <= len(redirectUrls):
         for i in range(redirectionDepth):
             if i + 1 <= len(redirectUrls):
                 checkingUrl = urlparse(redirectUrls[i]).netloc
                 if checkingUrl in spamLinkDomains:
-                    print('MURAT')
+                    print('Spam')
                     return True
-                # subResponce = requests.get(redirectUrls[i])
-                # checkLink(subResponce, spamLinkDomains)
+                else:
+                    subResponce = requests.get(redirectUrls[i])
+
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(checkLink(subResponce, spamLinkDomains))
             else:
                 # for j in range(i + 1, redirectionDepth):
-                checkLink(requests.get(redirectUrls[-1]), spamLinkDomains)
+                # checkLink(requests.get(redirectUrls[-1]), spamLinkDomains)
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(checkLink(subResponce, spamLinkDomains))
 
 
         for resp in response.history:
             print(resp.status_code, resp.url)
         print("Final destination:")
         print(response.status_code, response.url)
-        # print(False)
     else:
-        checkLink(response, spamLinkDomains)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(checkLink(subResponce, spamLinkDomains))
     return False
 
 if __name__ == "__main__":
-    isSpam('spam spam https://moimstg.page.link/dmCn', ['skills.github.com'], 1)
+    isSpam('spam spam https://moimstg.page.link/dmCn', ['skills.github.com'], 2)
